@@ -57,9 +57,12 @@ git submodule init
 git submodule update --recursive --remote
 cd lib/era-contracts/l1-contracts
 yarn 
+yarn build
 git submodule init
 git submodule update --recursive --remote
 git submodule update --remote --force 
+cd ../system-contracts
+yarn build
 cd ../..
 ```
 
