@@ -4,9 +4,18 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/openzeppelin-contracts-upgradeable-v4"]
+	path = lib/openzeppelin-contracts-upgradeable-v4
+	url = https://github.com/Openzeppelin/openzeppelin-contracts-upgradeable
+	branch = release-v4.9
+[submodule "lib/openzeppelin-contracts-v4"]
+	path = lib/openzeppelin-contracts-v4
+	url = https://github.com/Openzeppelin/openzeppelin-contracts
+	branch = release-v4.9
 [submodule "lib/era-contracts"]
 	path = lib/era-contracts
 	url = https://github.com/matter-labs/era-contracts
+	branch = kl/interop
 [submodule "lib/forge-zksync-std"]
 	path = lib/forge-zksync-std
 	url = https://github.com/Moonsong-Labs/forge-zksync-std

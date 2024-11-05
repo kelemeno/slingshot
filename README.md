@@ -51,6 +51,13 @@ Please use era-test-node from https://github.com/matter-labs/era-test-node/tree/
 
 for alloy-zksync: the latest from https://github.com/popzxc/alloy-zksync 
 
+```
+cd lib/era-contracts/l1-contracts
+yarn 
+git submodule init
+git submodule update --recursive
+cd ../..
+```
 
 
 Start 2 era test nodes and deploy the interop center to both.
