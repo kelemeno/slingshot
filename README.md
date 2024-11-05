@@ -52,10 +52,14 @@ Please use era-test-node from https://github.com/matter-labs/era-test-node/tree/
 for alloy-zksync: the latest from https://github.com/popzxc/alloy-zksync 
 
 ```
+git checkout kl/new-contracts
+git submodule init
+git submodule update --recursive --remote
 cd lib/era-contracts/l1-contracts
 yarn 
 git submodule init
-git submodule update --recursive
+git submodule update --recursive --remote
+git submodule update --remote --force 
 cd ../..
 ```
 
