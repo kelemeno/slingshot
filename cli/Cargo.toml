@@ -23,6 +23,8 @@ futures-util = "0.3.30"
 futures = "0.3"
 hex = "0.4"
 
+zksync_contracts = { git = "https://github.com/matter-labs/zksync-era.git", branch = "kl/interop-support" }
+zksync_system_constants = { git = "https://github.com/matter-labs/zksync-era.git", branch = "kl/interop-support" }
 
 [patch.crates-io]
 # Needed until https://github.com/alloy-rs/alloy/pull/1466 is released

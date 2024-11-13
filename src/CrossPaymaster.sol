@@ -52,7 +52,7 @@ contract CrossPaymaster is IPaymaster {
         // console2.log("Computed msg hash");
         // console2.logBytes32(msgHash);
 
-        // bytes memory transactionInteropProof = new bytes(0);
+        bytes memory transactionInteropProof = new bytes(0);
 
         // InteropCenter(interopCenterAddress).verifyInteropMessage(
         //     msgHash,
@@ -64,38 +64,38 @@ contract CrossPaymaster is IPaymaster {
         //     _transaction.paymasterInput,
         //     (InteropCenter.InteropMessage)
         // );
-        // console2.log("Fee unpacked");
-        // // Todo - proof should be taken from within signature.
-        // bytes memory proof = new bytes(0);
+        console2.log("Fee unpacked");
+        // Todo - proof should be taken from within signature.
+        bytes memory proof = new bytes(0);
 
-        // // executing fee bundle.
+        // executing fee bundle.
         // InteropCenter(interopCenterAddress).executeInteropBundle(
         //     feeMessage,
         //     proof
         // );
         // console2.log("Fee executed");
 
-        // address from = address(uint160(_transaction.from));
+        address from = address(uint160(_transaction.from));
 
-        // console2.log("Taking assets from", from);
+        console2.log("Taking assets from", from);
 
-        // uint256 currentBalance = PaymasterToken(paymasterTokenAddress)
-        //     .balanceOf(from);
-        // console2.log("Current balance", currentBalance);
+        uint256 currentBalance = PaymasterToken(paymasterTokenAddress)
+            .balanceOf(from);
+        console2.log("Current balance", currentBalance);
 
-        // uint256 tokensToPay = _transaction.maxFeePerGas * _transaction.gasLimit;
-        // console2.log("Charging user ", tokensToPay);
-        // PaymasterToken(paymasterTokenAddress).transferFrom(
-        //     from,
-        //     address(this),
-        //     tokensToPay
-        // );
-        // console2.log("Paying bootloader");
+        uint256 tokensToPay = _transaction.maxFeePerGas * _transaction.gasLimit;
+        console2.log("Charging user ", tokensToPay);
+        PaymasterToken(paymasterTokenAddress).transferFrom(
+            from,
+            address(this),
+            tokensToPay
+        );
+        console2.log("Paying bootloader");
 
-        // bool success = _transaction.payToTheBootloader();
-        // require(success, "Failed to pay the fee to the operator");
-        // console2.log("Paymaster is done");
-        // magic = PAYMASTER_VALIDATION_SUCCESS_MAGIC;
+        bool success = _transaction.payToTheBootloader();
+        require(success, "Failed to pay the fee to the operator");
+        console2.log("Paymaster is done");
+        magic = PAYMASTER_VALIDATION_SUCCESS_MAGIC;
     }
 
     function postTransaction(

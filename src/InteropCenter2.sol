@@ -47,44 +47,10 @@ contract InteropCenter2 {
 //         uint256 messageNum;
 //     }
 
-    function sendInteropMessage(bytes memory data) external returns (bytes32) {
-//         // Increment message count
-//         interopMessagesSent++;
-
-//         // Create the InteropMessage struct
-//         InteropMessage memory message = InteropMessage({
-//             data: data,
-//             sender: msg.sender,
-//             sourceChainId: block.chainid,
-//             messageNum: interopMessagesSent
-//         });
-
-//         console2.log("Sending interop from ", msg.sender);
-//         console2.log("Interop id: ", interopMessagesSent);
-
-//         // Serialize the entire InteropMessage struct
-//         bytes memory serializedMessage = abi.encode(message);
-
-//         // Calculate the msgHash directly from the serialized message
-//         bytes32 msgHash = keccak256(serializedMessage);
-
-//         // Emit the event with the serialized message as the payload
-//         emit InteropMessageSent(msgHash, message.sender, serializedMessage);
-
-//         // Return the message hash
-//         return msgHash;
-    }
-
 //     // *** Trust-me-bro implementation of the interop ***
 //     // The real one should be using merkle proofs and root hashes from Gateway.
 
-//     // Mapping to store received message hashes
-//     mapping(bytes32 => bool) public receivedMessages;
 
-//     // Function to receive and store a message hash, restricted to the owner
-//     function receiveInteropMessage(bytes32 msgHash) public onlyOwner {
-//         receivedMessages[msgHash] = true;
-//     }
 
 //     // Function to verify if a message hash has been received
 //     function verifyInteropMessage(
@@ -119,98 +85,6 @@ contract InteropCenter2 {
 //         uint256 destinationChain;
 //     }
 
-//     // Function to start a new bundle
-//     function startBundle(uint256 destinationChain) public returns (uint256) {
-//         uint256 bundleId = nextBundleId++;
-
-//         // Store only the destination chain in the storage mapping
-//         bundles[bundleId] = StoredInteropBundle({
-//             destinationChain: destinationChain
-//         });
-
-//         return bundleId;
-//     }
-
-//     function addToBundle(
-//         uint256 bundleId,
-//         uint256 destinationChainId,
-//         address destinationAddress,
-//         bytes memory payload,
-//         uint256 value
-//     ) public {
-//         // Ensure the bundle exists and has the correct destination chain
-//         require(
-//             bundles[bundleId].destinationChain == destinationChainId,
-//             "Destination chain mismatch"
-//         );
-
-//         // Create the InteropCall
-//         InteropCall memory newCall = InteropCall({
-//             sourceSender: msg.sender,
-//             destinationAddress: destinationAddress,
-//             destinationChainId: destinationChainId,
-//             data: payload,
-//             value: value
-//         });
-
-//         // Add the call to the bundle
-//         bundleCalls[bundleId].push(newCall);
-//     }
-
-//     // Function to finish and send the bundle
-//     function finishAndSendBundle(uint256 bundleId) public returns (bytes32) {
-//         // Ensure the bundle exists and has calls
-//         require(
-//             bundles[bundleId].destinationChain != 0,
-//             "Bundle does not exist"
-//         );
-//         require(bundleCalls[bundleId].length > 0, "Bundle is empty");
-
-//         // Prepare the full InteropBundle in memory for serialization
-//         InteropBundle memory fullBundle = InteropBundle({
-//             calls: bundleCalls[bundleId],
-//             destinationChain: bundles[bundleId].destinationChain
-//         });
-
-//         // Serialize the bundle data
-//         bytes memory serializedData = abi.encodePacked(
-//             InteropCenter.BUNDLE_PREFIX,
-//             abi.encode(fullBundle)
-//         );
-
-//         // Send the serialized data via interop message
-//         bytes32 msgHash = InteropCenter(address(this)).sendInteropMessage(
-//             serializedData
-//         );
-
-//         // Clean up
-//         delete bundles[bundleId];
-//         delete bundleCalls[bundleId];
-
-//         return msgHash;
-//     }
-
-//     function sendCall(
-//         uint256 destinationChain,
-//         address destinationAddress,
-//         bytes calldata payload,
-//         uint256 value
-//     ) public returns (bytes32) {
-//         // Step 1: Start a new bundle
-//         uint256 bundleId = startBundle(destinationChain);
-
-//         // Step 2: Add a call to the bundle
-//         addToBundle(
-//             bundleId,
-//             destinationChain,
-//             destinationAddress,
-//             payload,
-//             value
-//         );
-
-//         // Step 3: Finish and send the bundle
-//         return finishAndSendBundle(bundleId);
-//     }
 
 //     // Mapping to store trusted sources by chain ID.
 //     // In reality - we'll be trusting the 'fixed' pre-deployed addresses on each chain.

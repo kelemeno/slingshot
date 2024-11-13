@@ -29,13 +29,16 @@ use alloy::sol;
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use std::{
-    collections::HashMap,
-    fmt::{Debug, Formatter},
-    str::FromStr,
-    sync::Arc,
+    collections::HashMap, fmt::{Debug, Formatter}, ops::Add, str::FromStr, sync::Arc
 };
 use tokio::sync::Mutex;
-use InteropCenter::InteropMessage;
+// use InteropCenter::InteropMessage;
+
+use zksync_system_constants::contracts::{L2_INTEROP_HANDLER_ADDRESS, L2_INTEROP_CENTER_ADDRESS, INTEROP_ACCOUNT_ADDRESS};
+
+const INTEROP_HANDLER_ADDRESS : Address = Address(FixedBytes(L2_INTEROP_HANDLER_ADDRESS.0)) ;
+const INTEROP_CENTER_ADDRESS : Address = Address(FixedBytes(L2_INTEROP_CENTER_ADDRESS.0)) ;
+
 
 sol! {
     #[sol(rpc)]
@@ -47,36 +50,50 @@ sol! {
         );
 
 
-        struct InteropMessage {
+        // struct InteropMessage {
+        //     bytes data;
+        //     address sender;
+        //     uint256 sourceChainId;
+        //     uint256 messageNum;
+        // }
+
+        // struct InteropTransaction {
+        //     address sourceChainSender;
+        //     uint256 destinationChain;
+        //     uint256 gasLimit;
+        //     uint256 gasPrice;
+        //     uint256 value;
+        //     bytes32 bundleHash;
+        //     bytes32 feesBundleHash;
+        //     address destinationPaymaster;
+        //     bytes destinationPaymasterInput;
+        // }
+
+        struct InteropCall {
+            address to;
+            address from;
+            uint256 value;
             bytes data;
-            address sender;
-            uint256 sourceChainId;
-            uint256 messageNum;
         }
 
-        struct InteropTransaction {
-            address sourceChainSender;
-            uint256 destinationChain;
-            uint256 gasLimit;
-            uint256 gasPrice;
-            uint256 value;
-            bytes32 bundleHash;
-            bytes32 feesBundleHash;
-            address destinationPaymaster;
-            bytes destinationPaymasterInput;
+        struct InteropBundle {
+            uint256 destinationChainId;
+            InteropCall[] calls;
+            // If not set - anyone can execute it.
+            address[] executionAddresses;
+            // Who can 'cancel' this bundle.
+            address cancellationAddress;
         }
 
         function getAliasedAccount(
             address sourceAccount,
             uint256 sourceChainId
         ) public returns (address);
-
-
-        function executeInteropBundle(
-            InteropMessage memory message,
-            bytes memory proof
-        ) public;
-
+        
+        // function executeInteropBundle(
+        //     InteropMessage memory message,
+        //     bytes memory proof
+        // ) public;
 
         function receiveInteropMessage(bytes32 msgHash) public;
 
@@ -85,10 +102,10 @@ sol! {
             address trustedSender
         ) public;
 
-        function deployAliasedAccount(
-            address sourceAccount,
-            uint256 sourceChainId
-        ) public returns (address);
+        // function deployAliasedAccount(
+        //     address sourceAccount,
+        //     uint256 sourceChainId
+        // ) public returns (address);
 
         mapping(uint256 => address) public preferredPaymasters;
 
@@ -112,19 +129,24 @@ sol! {
 
 
     }
-
     #[sol(rpc)]
-    contract CrossPaymaster {
-        address public paymasterTokenAddress;
+    contract InteropHandler {
+
     }
 
-    #[sol(rpc)]
-    contract PaymasterToken {
-        function addOtherBridge(
-            uint256 sourceChainId,
-            address sourceAddress
-        ) public;
-    }
+
+    // #[sol(rpc)]
+    // contract CrossPaymaster {
+    //     address public paymasterTokenAddress;
+    // }
+
+    // #[sol(rpc)]
+    // contract PaymasterToken {
+    //     function addOtherBridge(
+    //         uint256 sourceChainId,
+    //         address sourceAddress
+    //     ) public;
+    // }
 }
 
 pub struct InteropMessageParsed {
@@ -204,36 +226,36 @@ impl InteropMessageParsed {
             .await
             .unwrap();
         println!("Code length is {}", code.len());
-        if code.len() == 0 {
-            // No contract deployed.
+        // if code.len() == 0 {
+        //     // No contract deployed.
 
-            let admin_provider = zksync_provider()
-                .with_recommended_fillers()
-                .wallet(destination_interop_chain.admin_wallet.clone())
-                .on_http(destination_interop_chain.rpc.parse().unwrap());
+        //     let admin_provider = zksync_provider()
+        //         .with_recommended_fillers()
+        //         .wallet(destination_interop_chain.admin_wallet.clone())
+        //         .on_http(destination_interop_chain.rpc.parse().unwrap());
 
-            let contract =
-                InteropCenter::new(destination_interop_chain.interop_address, &admin_provider);
+        //     let contract =
+            //     InteropCenter::new(destination_interop_chain.interop_center_address, &admin_provider);
 
-            // TODO: before sending, maybe check if the message was forwarded already..
+            // // TODO: before sending, maybe check if the message was forwarded already..
 
-            let tx_hash = contract
-                .deployAliasedAccount(
-                    interop_tx.sourceChainSender,
-                    self.interop_message.sourceChainId,
-                )
-                .send()
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
+            // let tx_hash = contract
+            //     .deployAliasedAccount(
+            //         interop_tx.sourceChainSender,
+            //         self.interop_message.sourceChainId,
+            //     )
+            //     .send()
+            //     .await
+            //     .unwrap()
+            //     .watch()
+            //     .await
+            //     .unwrap();
 
-            println!(
-                "Deployed aliased account on chain {} {:?} with tx {:?}",
-                destination_chain_id, from_addr, tx_hash
-            );
-        }
+            // println!(
+            //     "Deployed aliased account on chain {} {:?} with tx {:?}",
+            //     destination_chain_id, from_addr, tx_hash
+            // );
+        // }
 
         let map = all_messages.lock().await;
 
@@ -254,52 +276,53 @@ impl InteropMessageParsed {
         } else {
             vec![]
         };
-        println!("Paymaster input is: {}", hex::encode(&paymaster_input));
+        // println!("Paymaster input is: {}", hex::encode(&paymaster_input));
 
-        let paymaster_params = PaymasterParams {
-            paymaster: interop_tx.destinationPaymaster,
-            paymaster_input: paymaster_input.into(),
-        };
-        let paymaster = paymaster_params.paymaster;
-        println!("Using paymaster: {}", paymaster);
+        // let paymaster_params = PaymasterParams {
+        //     paymaster: interop_tx.destinationPaymaster,
+        //     paymaster_input: paymaster_input.into(),
+        // };
+        // let paymaster = paymaster_params.paymaster;
+        // println!("Using paymaster: {}", paymaster);
 
-        let balance = destination_interop_chain
-            .provider
-            .get_balance(paymaster)
-            .await
-            .unwrap();
+        // let balance = destination_interop_chain
+        //     .provider
+        //     .get_balance(paymaster)
+        //     .await
+        //     .unwrap();
 
         // Refill the paymaster if needed.
-        let mut limit: U256 = 1_000_000.try_into().unwrap();
-        limit = limit.checked_mul(1_000_000.try_into().unwrap()).unwrap();
-        limit = limit.checked_mul(1_000_000.try_into().unwrap()).unwrap();
+        // let mut limit: U256 = 1_000_000.try_into().unwrap();
+        // limit = limit.checked_mul(1_000_000.try_into().unwrap()).unwrap();
+        // limit = limit.checked_mul(1_000_000.try_into().unwrap()).unwrap();
 
-        if balance < limit {
-            let admin_provider = zksync_provider()
-                .with_recommended_fillers()
-                .wallet(destination_interop_chain.admin_wallet.clone())
-                .on_http(destination_interop_chain.rpc.parse().unwrap());
-            let tx = TransactionRequest::default()
-                .with_to(paymaster)
-                .with_value(limit);
-            let tx_hash = admin_provider
-                .send_transaction(tx)
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
-            println!("Sending 1 eth : {:?} ", tx_hash);
-        }
+        // if balance < limit {
+        //     let admin_provider = zksync_provider()
+        //         .with_recommended_fillers()
+        //         .wallet(destination_interop_chain.admin_wallet.clone())
+        //         .on_http(destination_interop_chain.rpc.parse().unwrap());
+        //     let tx = TransactionRequest::default()
+        //         .with_to(paymaster)
+        //         .with_value(limit);
+        //     let tx_hash = admin_provider
+        //         .send_transaction(tx)
+        //         .await
+        //         .unwrap()
+        //         .watch()
+        //         .await
+        //         .unwrap();
+        //     println!("Sending 1 eth : {:?} ", tx_hash);
+        // }
 
         let bundle_msg = map.get(&interop_tx.bundleHash).unwrap();
 
         let proof = Bytes::new();
 
-        let calldata = InteropCenter::executeInteropBundleCall::new((
-            bundle_msg.interop_message.clone(),
-            proof,
-        ));
+        let calldata = abi
+        // InteropCenter::executeInteropBundleCall::new((
+        //     bundle_msg.interop_message.clone(),
+        //     proof,
+        // ));
 
         let stuff = InteropCenter::TransactionReservedStuff {
             sourceChainSender: interop_tx.sourceChainSender,
@@ -315,7 +338,7 @@ impl InteropMessageParsed {
 
         let tx = TransactionRequest::default()
             .with_call(&calldata)
-            .with_to(destination_interop_chain.interop_address)
+            .with_to(destination_interop_chain.interop_handler_address)
             // FIXME: no value passing.
             //.with_value(interop_tx.value)
             .with_gas_limit(interop_tx.gasLimit.try_into().unwrap())
@@ -324,7 +347,7 @@ impl InteropMessageParsed {
             .with_max_fee_per_gas(interop_tx.gasPrice.try_into().unwrap())
             .with_max_priority_fee_per_gas(interop_tx.gasPrice.try_into().unwrap())
             .with_from(from_addr)
-            .with_paymaster(paymaster_params)
+            // .with_paymaster(paymaster_params)
             .with_custom_signature(custom_signature);
 
         (destination_chain_id, tx)
@@ -353,7 +376,8 @@ pub struct InteropChain {
         alloy::transports::http::Http<reqwest::Client>,
         alloy_zksync::network::Zksync,
     >,
-    pub interop_address: Address,
+    pub interop_center_address: Address,
+    pub interop_handler_address:Address, 
     pub rpc: String,
     pub chain_id: u64,
     pub admin_wallet: ZksyncWallet,
@@ -367,10 +391,10 @@ impl InteropChain {
         source_chain: U256,
         source_address: Address,
     ) -> Address {
-        println!("Calling {:?}", self.interop_address);
+        println!("Calling {:?}", self.interop_handler_address);
         println!("params {:?} {:?}", source_address, source_chain);
 
-        let contract = InteropCenter::new(self.interop_address, &self.provider);
+        let contract = InteropCenter::new(self.interop_center_address, &self.provider);
         contract
             .getAliasedAccount(source_address, source_chain)
             .call()
@@ -379,26 +403,26 @@ impl InteropChain {
             ._0
     }
 
-    pub async fn get_preferred_paymaster(&self) -> Address {
-        let contract = InteropCenter::new(self.interop_address, &self.provider);
-        contract
-            .preferredPaymasters(self.chain_id.try_into().unwrap())
-            .call()
-            .await
-            .unwrap()
-            ._0
-    }
+    // pub async fn get_preferred_paymaster(&self) -> Address {
+    //     let contract = InteropCenter::new(self.interop_center_address, &self.provider);
+    //     contract
+    //         .preferredPaymasters(self.chain_id.try_into().unwrap())
+    //         .call()
+    //         .await
+    //         .unwrap()
+    //         ._0
+    // }
 
-    pub async fn get_paymaster_basic_token(&self) -> Address {
-        let paymaster = self.get_preferred_paymaster().await;
-        let contract = CrossPaymaster::new(paymaster, &self.provider);
-        contract
-            .paymasterTokenAddress()
-            .call()
-            .await
-            .unwrap()
-            .paymasterTokenAddress
-    }
+    // pub async fn get_paymaster_basic_token(&self) -> Address {
+    //     let paymaster = self.get_preferred_paymaster().await;
+    //     let contract = CrossPaymaster::new(paymaster, &self.provider);
+    //     contract
+    //         .paymasterTokenAddress()
+    //         .call()
+    //         .await
+    //         .unwrap()
+    //         .paymasterTokenAddress
+    // }
 
     pub async fn listen_on_interop_messages<F, Fut>(&self, callback: F)
     where
@@ -411,7 +435,7 @@ impl InteropChain {
         let filter = Filter::new()
             .from_block(latest_block.saturating_sub(BLOCKS_IN_THE_PAST))
             .event_signature(InteropCenter::InteropMessageSent::SIGNATURE_HASH)
-            .address(self.interop_address);
+            .address(self.interop_center_address);
 
         let logs = self.provider.get_logs(&filter).await.unwrap();
 
@@ -447,7 +471,7 @@ async fn handle_type_a_message(
             .wallet(entry.admin_wallet.clone())
             .on_http(entry.rpc.parse().unwrap());
 
-        let contract = InteropCenter::new(entry.interop_address, &admin_provider);
+        let contract = InteropCenter::new(entry.interop_center_address, &admin_provider);
 
         // TODO: before sending, maybe check if the message was forwarded already..
 
@@ -512,7 +536,7 @@ async fn handle_type_c_message(
 #[command(about = "Handles RPC URLs and interop Ethereum addresses")]
 struct Cli {
     /// List of RPC URL and interop address pairs (e.g. -r URL ADDRESS)
-    #[arg(short, long, num_args = 2, value_names = ["URL", "ADDRESS"])]
+    #[arg(short, long, num_args = 1, value_names = ["URL"])]
     rpc: Vec<String>,
 
     #[arg(long)]
@@ -523,7 +547,7 @@ struct Cli {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let mut rpc_addresses = Vec::new();
+    let mut rpc_addresses: Vec<&String> = Vec::new();
 
     let private_key = cli
         .private_key
@@ -537,21 +561,18 @@ async fn main() -> anyhow::Result<()> {
     let admin_wallet = ZksyncWallet::from(signer);
 
     // Process URL-address pairs
-    for chunk in cli.rpc.chunks(2) {
-        if chunk.len() == 2 {
+    for chunk in cli.rpc.chunks(1) {
+        if chunk.len() == 1 {
             let url = &chunk[0];
-            match Address::from_str(&chunk[1]) {
-                Ok(address) => rpc_addresses.push((url.clone(), address)),
-                Err(_) => eprintln!("Invalid Ethereum address: {}", chunk[1]),
-            }
+            rpc_addresses.push(url);
         } else {
-            eprintln!("Each RPC URL must be paired with an Ethereum address.");
+            eprintln!("Each RPC URL must be provided.");
         }
     }
 
     let mut providers_map = HashMap::new();
 
-    for (rpc, interop_address) in rpc_addresses {
+    for rpc in rpc_addresses {
         let provider = zksync_provider()
             .with_recommended_fillers()
             .on_http(rpc.clone().parse().unwrap());
@@ -561,7 +582,8 @@ async fn main() -> anyhow::Result<()> {
             chain_id,
             Arc::new(InteropChain {
                 provider,
-                interop_address,
+                interop_center_address: INTEROP_CENTER_ADDRESS,
+                interop_handler_address: INTEROP_HANDLER_ADDRESS,
                 rpc: rpc.clone(),
                 chain_id,
                 admin_wallet: admin_wallet.clone(),
@@ -576,102 +598,102 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Setup trust between inteops.
-    for (_, source_chain) in &providers_map {
-        for (_, destination_chain) in &providers_map {
-            let admin_provider = zksync_provider()
-                .with_recommended_fillers()
-                .wallet(destination_chain.admin_wallet.clone())
-                .on_http(destination_chain.rpc.parse().unwrap());
+    // for (_, source_chain) in &providers_map {
+    //     for (_, destination_chain) in &providers_map {
+    //         let admin_provider = zksync_provider()
+    //             .with_recommended_fillers()
+    //             .wallet(destination_chain.admin_wallet.clone())
+    //             .on_http(destination_chain.rpc.parse().unwrap());
 
-            let contract = InteropCenter::new(destination_chain.interop_address, &admin_provider);
+    //         let contract = InteropCenter::new(destination_chain.interop_center_address, &admin_provider);
 
-            // TODO: before sending, maybe check if trust was already set?
+    //         // TODO: before sending, maybe check if trust was already set?
 
-            let tx_hash = contract
-                .addTrustedSource(
-                    source_chain.chain_id.try_into().unwrap(),
-                    source_chain.interop_address,
-                )
-                .send()
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
+    //         let tx_hash = contract
+    //             .addTrustedSource(
+    //                 source_chain.chain_id.try_into().unwrap(),
+    //                 source_chain.interop_center_address,
+    //             )
+    //             .send()
+    //             .await
+    //             .unwrap()
+    //             .watch()
+    //             .await
+    //             .unwrap();
 
-            println!(
-                "Trust from {} to {} tx {:?}",
-                source_chain.chain_id, destination_chain.chain_id, tx_hash
-            );
-        }
-    }
+    //         println!(
+    //             "Trust from {} to {} tx {:?}",
+    //             source_chain.chain_id, destination_chain.chain_id, tx_hash
+    //         );
+    //     }
+    // }
 
     // Setup info about remote paymasters too
-    for (_, source_chain) in &providers_map {
-        let source_chain_paymaster = source_chain.get_preferred_paymaster().await;
-        for (_, destination_chain) in &providers_map {
-            let admin_provider = zksync_provider()
-                .with_recommended_fillers()
-                .wallet(destination_chain.admin_wallet.clone())
-                .on_http(destination_chain.rpc.parse().unwrap());
+    // for (_, source_chain) in &providers_map {
+    //     let source_chain_paymaster = source_chain.get_preferred_paymaster().await;
+    //     for (_, destination_chain) in &providers_map {
+    //         let admin_provider = zksync_provider()
+    //             .with_recommended_fillers()
+    //             .wallet(destination_chain.admin_wallet.clone())
+    //             .on_http(destination_chain.rpc.parse().unwrap());
 
-            let contract = InteropCenter::new(destination_chain.interop_address, &admin_provider);
+    //         let contract = InteropCenter::new(destination_chain.interop_center_address, &admin_provider);
 
-            // TODO: before sending, maybe check if trust was already set?
+    //         // TODO: before sending, maybe check if trust was already set?
 
-            let tx_hash = contract
-                .setPreferredPaymaster(
-                    source_chain.chain_id.try_into().unwrap(),
-                    source_chain_paymaster,
-                )
-                .send()
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
+    //         let tx_hash = contract
+    //             .setPreferredPaymaster(
+    //                 source_chain.chain_id.try_into().unwrap(),
+    //                 source_chain_paymaster,
+    //             )
+    //             .send()
+    //             .await
+    //             .unwrap()
+    //             .watch()
+    //             .await
+    //             .unwrap();
 
-            println!(
-                "Paymaster Trust from {} to {} tx {:?}",
-                source_chain.chain_id, destination_chain.chain_id, tx_hash
-            );
-        }
-    }
+    //         println!(
+    //             "Paymaster Trust from {} to {} tx {:?}",
+    //             source_chain.chain_id, destination_chain.chain_id, tx_hash
+    //         );
+    //     }
+    // }
 
     // Setup trust between 'paymaster tokens'
-    for (_, source_chain) in &providers_map {
-        let source_chain_token = source_chain.get_paymaster_basic_token().await;
-        for (_, destination_chain) in &providers_map {
-            let admin_provider = zksync_provider()
-                .with_recommended_fillers()
-                .wallet(destination_chain.admin_wallet.clone())
-                .on_http(destination_chain.rpc.parse().unwrap());
+    // for (_, source_chain) in &providers_map {
+    //     let source_chain_token = source_chain.get_paymaster_basic_token().await;
+    //     for (_, destination_chain) in &providers_map {
+    //         let admin_provider = zksync_provider()
+    //             .with_recommended_fillers()
+    //             .wallet(destination_chain.admin_wallet.clone())
+    //             .on_http(destination_chain.rpc.parse().unwrap());
 
-            let destination_chain_token: Address =
-                destination_chain.get_paymaster_basic_token().await;
+    //         let destination_chain_token: Address =
+    //             destination_chain.get_paymaster_basic_token().await;
 
-            let contract = PaymasterToken::new(destination_chain_token, &admin_provider);
+    //         let contract = PaymasterToken::new(destination_chain_token, &admin_provider);
 
-            // TODO: before sending, maybe check if trust was already set?
+    //         // TODO: before sending, maybe check if trust was already set?
 
-            let tx_hash = contract
-                .addOtherBridge(
-                    source_chain.chain_id.try_into().unwrap(),
-                    source_chain_token,
-                )
-                .send()
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
+    //         let tx_hash = contract
+    //             .addOtherBridge(
+    //                 source_chain.chain_id.try_into().unwrap(),
+    //                 source_chain_token,
+    //             )
+    //             .send()
+    //             .await
+    //             .unwrap()
+    //             .watch()
+    //             .await
+    //             .unwrap();
 
-            println!(
-                "Token Trust from {} to {} tx {:?}",
-                source_chain.chain_id, destination_chain.chain_id, tx_hash
-            );
-        }
-    }
+    //         println!(
+    //             "Token Trust from {} to {} tx {:?}",
+    //             source_chain.chain_id, destination_chain.chain_id, tx_hash
+    //         );
+    //     }
+    // }
 
     let shared_map: Arc<Mutex<HashMap<FixedBytes<32>, InteropMessageParsed>>> =
         Arc::new(Mutex::new(HashMap::new()));

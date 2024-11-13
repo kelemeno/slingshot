@@ -4,6 +4,7 @@ out = "out"
 libs = ["lib"]
 
 fs_permissions = [
+     { access = "read", path = "./lib/era-contracts/l1-contracts" },
     { access = "read", path = "./lib/era-contracts/system-contracts/artifacts-zk/contracts-preprocessed" },
     { access = "read", path = "./out" },
     { access = "read", path = "./zkout" },
