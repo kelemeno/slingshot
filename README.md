@@ -2,7 +2,9 @@
 
 ## Development with forge script
 
+``` 
 forge script script/Interop.s.sol:InteropE2ETx --rpc-url http://localhost:8011 --private-key 0x3d3cbc973389cb26f657686445bcc75662b415b656078503592ac8c1abb8810e --zksync  --skip-simulation  --enable-eravm-extensions --broadcast
+```
 
 
 
@@ -47,10 +49,13 @@ forge script script/Interop.s.sol:InteropE2E --rpc-url http://localhost:8011 --p
 
 **IMPORTANT**
 
-Please use era-test-node from https://github.com/matter-labs/era-test-node/tree/mmzk_1019_for_slingshot branch.
+Please use era-test-node from https://github.com/matter-labs/era-test-node/tree/kl/access-control branch.
 
 for alloy-zksync: the latest from https://github.com/popzxc/alloy-zksync 
 
+for foundry zksync: the latest from: https://github.com/matter-labs/foundry-zksync/tree/kl/access-control-deps
+
+contracts need to be built: 
 ```
 git checkout kl/new-contracts
 git submodule init
