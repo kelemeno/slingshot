@@ -26,8 +26,8 @@ import {IInteropCenter} from "../lib/era-contracts/l1-contracts/contracts/bridge
 import {MessageRoot} from "../lib/era-contracts/l1-contracts/contracts/bridgehub/MessageRoot.sol";
 import {IBridgehub} from "../lib/era-contracts/l1-contracts/contracts/bridgehub/IBridgehub.sol";
 
-import {SystemContractsArgs, SharedL2ContractL1DeployerUtils} from "../lib/era-contracts/l1-contracts/test/foundry/l1/integration/l2-tests-in-l1-context/_SharedL2ContractL1DeployerUtils.sol";
-import {SharedL2ContractDeployer} from "../lib/era-contracts/l1-contracts/test/foundry/l1/integration/l2-tests-abstract/_SharedL2ContractDeployer.sol";
+// import {SystemContractsArgs, SharedL2ContractL1DeployerUtils} from "../lib/era-contracts/l1-contracts/test/foundry/l1/integration/l2-tests-in-l1-context/_SharedL2ContractL1DeployerUtils.sol";
+import {SharedL2ContractDeployer, SystemContractsArgs} from "../lib/era-contracts/l1-contracts/test/foundry/l1/integration/l2-tests-abstract/_SharedL2ContractDeployer.sol";
 import {SharedL2ContractL2DeployerUtils} from "../lib/era-contracts/l1-contracts/test/foundry/l2/integration/_SharedL2ContractL2DeployerUtils.sol";
 
 contract Deploy is Script, DeployUtils, SharedL2ContractL2DeployerUtils, SharedL2ContractDeployer {
