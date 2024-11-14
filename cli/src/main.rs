@@ -35,6 +35,9 @@ use tokio::sync::Mutex;
 // use InteropCenter::InteropMessage;
 
 use zksync_system_constants::contracts::{L2_INTEROP_HANDLER_ADDRESS, L2_INTEROP_CENTER_ADDRESS, INTEROP_ACCOUNT_ADDRESS};
+use zk_toolbox_common::withdraw;
+use zksync_basic_types;
+// use zksync_types::api::Log;
 
 const INTEROP_HANDLER_ADDRESS : Address = Address(FixedBytes(L2_INTEROP_HANDLER_ADDRESS.0)) ;
 const INTEROP_CENTER_ADDRESS : Address = Address(FixedBytes(L2_INTEROP_CENTER_ADDRESS.0)) ;
@@ -64,9 +67,13 @@ sol! {
         //     uint256 gasPrice;
         //     uint256 value;
         //     bytes32 bundleHash;
-        //     bytes32 feesBundleHash;
+        //     bytes32 feeBundleHash;
         //     address destinationPaymaster;
         //     bytes destinationPaymasterInput;
+        // }
+
+        // struct InteropMessage {
+        //     bytes data;
         // }
 
         struct InteropCall {
@@ -83,6 +90,20 @@ sol! {
             address[] executionAddresses;
             // Who can 'cancel' this bundle.
             address cancellationAddress;
+        }
+
+        struct GasFields {
+            uint256 gasLimit;
+            uint256 gasPerPubdataByteLimit;
+            address refundRecipient;
+        }
+        
+        struct InteropTrigger {
+            uint256 destinationChainId;
+            address sender;
+            bytes32 feeBundleHash;
+            bytes32 executionBundleHash;
+            GasFields gasFields;
         }
 
         function getAliasedAccount(
@@ -124,7 +145,7 @@ sol! {
             uint256 messageNum;
             uint256 destinationChainId;
             bytes32 bundleHash;
-            bytes32 feesBundleHash;
+            bytes32 feeBundleHash;
         }
 
 
@@ -159,7 +180,7 @@ pub struct InteropMessageParsed {
     // 'data' field from the Log (it contains the InteropMessage).
     pub data: Bytes,
 
-    pub interop_message: InteropCenter::InteropMessage,
+    // pub interop_message: InteropCenter::InteropMessage,
     pub chain_id: u64,
 }
 
@@ -174,26 +195,49 @@ impl Debug for InteropMessageParsed {
     }
 }
 
+fn zk_log_from_alloy_log(log: &Log) -> zksync_types::api::Log {
+    zksync_types::api::Log {
+        address: zksync_types::H160::from_slice(log.address().as_slice()),
+        topics: log.topics().iter()
+            .map(|t| zksync_types::H256::from_slice(t.as_slice()))
+            .collect(),
+        data: zksync_basic_types::web3::Bytes::from(log.data().data.to_vec()),
+        block_number: log.block_number.map(|n| zksync_types::U64::from(n)),
+        block_hash: log.block_hash.map(|h| zksync_types::H256::from_slice(h.as_slice())),
+        transaction_hash: log.transaction_hash.map(|h| zksync_types::H256::from_slice(h.as_slice())),
+        transaction_index: log.transaction_index.map(zksync_types::U64::from),
+        log_index: log.log_index.map(zksync_types::U256::from),
+        l1_batch_number: None, // Not available in alloy Log
+        transaction_log_index: None, //log.transaction_log_index.map(zksync_types::U64::from),
+        log_type: None, //log.log_type.clone(),
+        removed: Some(log.removed),
+        block_timestamp: None, // Not available in alloy Log
+    }
+}
+
 impl InteropMessageParsed {
     pub fn from_log(log: &Log, chain_id: u64) -> Self {
-        let interop_message =
-            InteropCenter::InteropMessage::abi_decode(&log.data().data.slice(64..), true).unwrap();
+        // let interop_message =
+        //     InteropCenter::InteropMessage::abi_decode(&log.data().data.slice(64..), true).unwrap();
+        let (sender, message) = withdraw::get_message_from_log(&zk_log_from_alloy_log(&log).await.unwrap()).unwrap();
 
         InteropMessageParsed {
             interop_center_sender: log.address(),
             msg_hash: log.topics()[1],
-            sender: Address::from_slice(&log.topics()[2].0[12..]),
-            data: log.data().data.clone(),
-            interop_message,
+            // sender: Address::from_slice(&log.topics()[2].0[12..]),
+            // data: log.data().data.clone(),
+            sender: sender.as_slice(),
+            data: message.to_vec(),
+            // interop_message,
             chain_id,
         }
     }
 
     pub fn is_type_b(&self) -> bool {
-        return self.interop_center_sender == self.sender && self.interop_message.data[0] == 1;
+        return self.interop_center_sender == self.sender && InteropCenter::InteropBundle::abi_decode(&self.data, true).is_ok();
     }
     pub fn is_type_c(&self) -> bool {
-        return self.interop_center_sender == self.sender && self.interop_message.data[0] == 2;
+        return self.interop_center_sender == self.sender && InteropCenter::InteropTrigger::abi_decode(&self.data, true).is_ok();
     }
 
     pub async fn create_transaction_request(
@@ -202,19 +246,19 @@ impl InteropMessageParsed {
         all_messages: Arc<Mutex<HashMap<FixedBytes<32>, InteropMessageParsed>>>,
     ) -> (u64, TransactionRequest) {
         let interop_tx =
-            InteropCenter::InteropTransaction::abi_decode(&self.interop_message.data[1..], true)
+            InteropCenter::InteropTrigger::abi_decode(&self.data, true)
                 .unwrap();
 
-        println!("interop tx desxtination: {}", interop_tx.destinationChain);
+        println!("interop tx desxtination: {}", interop_tx.destinationChainId);
 
-        let destination_chain_id: u64 = interop_tx.destinationChain.try_into().unwrap();
+        let destination_chain_id: u64 = interop_tx.destinationChainId.try_into().unwrap();
         let destination_interop_chain = providers_map.get(&destination_chain_id).unwrap();
 
         let from_addr = destination_interop_chain
             .get_aliased_account_address(
                 // TODO: Or provided from the RPC??
-                self.interop_message.sourceChainId,
-                interop_tx.sourceChainSender,
+                U256::from(self.chain_id),
+                interop_tx.sender,
             )
             .await;
 
@@ -259,20 +303,21 @@ impl InteropMessageParsed {
 
         let map = all_messages.lock().await;
 
-        let paymaster_input = if !interop_tx.feesBundleHash.is_zero() {
+        let paymaster_input = if !interop_tx.feeBundleHash.is_zero() {
             println!("Fee Bundle is set");
             let fee_interop_msg = map
-                .get(&interop_tx.feesBundleHash)
+                .get(&interop_tx.feeBundleHash)
                 .expect(&format!(
                     "Failed to find fee bundle msg: {:?}",
-                    interop_tx.feesBundleHash
+                    interop_tx.feeBundleHash
                 ))
-                .interop_message
+                .data
                 .clone();
 
             //fee_interop_msg.interop_message.abi_encode()
             //vec![0u8]
-            InteropMessage::abi_encode(&fee_interop_msg)
+            // InteropCenter::InteropTrigger::abi_encode(&fee_interop_msg)
+            fee_interop_msg.to_vec()
         } else {
             vec![]
         };
@@ -314,11 +359,11 @@ impl InteropMessageParsed {
         //     println!("Sending 1 eth : {:?} ", tx_hash);
         // }
 
-        let bundle_msg = map.get(&interop_tx.bundleHash).unwrap();
+        let bundle_msg = map.get(&interop_tx.executionBundleHash).unwrap();
 
         let proof = Bytes::new();
 
-        let calldata = abi
+        // let calldata = abi
         // InteropCenter::executeInteropBundleCall::new((
         //     bundle_msg.interop_message.clone(),
         //     proof,
@@ -331,7 +376,7 @@ impl InteropMessageParsed {
             messageNum: self.interop_message.messageNum,
             destinationChainId: interop_tx.destinationChain,
             bundleHash: interop_tx.bundleHash,
-            feesBundleHash: interop_tx.feesBundleHash,
+            feeBundleHash: interop_tx.feeBundleHash,
         };
 
         let custom_signature = InteropCenter::TransactionReservedStuff::abi_encode(&stuff).into();
@@ -460,33 +505,34 @@ impl InteropChain {
     }
 }
 
-async fn handle_type_a_message(
-    msg: &InteropMessageParsed,
-    providers_map: &HashMap<u64, Arc<InteropChain>>,
-) {
-    // Forward the message to all the other chains.
-    for (chain_id, entry) in providers_map {
-        let admin_provider = zksync_provider()
-            .with_recommended_fillers()
-            .wallet(entry.admin_wallet.clone())
-            .on_http(entry.rpc.parse().unwrap());
+// we don't need to receive msgs, everything is accepted.
+// async fn handle_type_a_message(
+//     msg: &InteropMessageParsed,
+//     providers_map: &HashMap<u64, Arc<InteropChain>>,
+// ) {
+//     // Forward the message to all the other chains.
+//     for (chain_id, entry) in providers_map {
+//         let admin_provider = zksync_provider()
+//             .with_recommended_fillers()
+//             .wallet(entry.admin_wallet.clone())
+//             .on_http(entry.rpc.parse().unwrap());
 
-        let contract = InteropCenter::new(entry.interop_center_address, &admin_provider);
+//         let contract = InteropCenter::new(entry.interop_center_address, &admin_provider);
 
-        // TODO: before sending, maybe check if the message was forwarded already..
+//         // TODO: before sending, maybe check if the message was forwarded already..
 
-        let tx_hash = contract
-            .receiveInteropMessage(msg.msg_hash)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
+//         let tx_hash = contract
+//             .receiveInteropMessage(msg.msg_hash)
+//             .send()
+//             .await
+//             .unwrap()
+//             .watch()
+//             .await
+//             .unwrap();
 
-        println!("Forwarded msg to {} with tx {:?}", chain_id, tx_hash);
-    }
-}
+//         println!("Forwarded msg to {} with tx {:?}", chain_id, tx_hash);
+//     }
+// }
 
 async fn handle_type_c_message(
     msg: &InteropMessageParsed,
